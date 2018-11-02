@@ -4,7 +4,6 @@ from datetime import datetime
 
 session = HTMLSession()
 
-
 def get_tweets(user, pages=25):
     """Gets tweets for a given user, via the Twitter frontend API."""
 
@@ -16,26 +15,31 @@ def get_tweets(user, pages=25):
         'X-Twitter-Active-User': 'yes',
         'X-Requested-With': 'XMLHttpRequest'
     }
+    
+    amountPages = pages
 
     def gen_tweets(pages):
         r = session.get(url, headers=headers)
 
         while pages > 0:
+            status = 'ok'
             try:
-                html = HTML(html=r.json()['items_html'],
-                            url='bunk', default_encoding='utf-8')
-            except KeyError:
-                raise ValueError(
-                    f'Oops! Either "{user}" does not exist or is private.')
-
+                html = HTML(html=r.json()['items_html'], url='bunk', default_encoding='utf-8')
+            except:
+                # let other errors raise
+                status = 'page not found'
+            
             comma = ","
             dot = "."
             tweets = []
             for tweet in html.find('.stream-item'):
-                text = tweet.find('.tweet-text')[0].full_text
+                try:
+                  text = tweet.find('.tweet-text')[0].full_text
+                except:
+                  continue
                 tweetId = tweet.find(
                     '.js-permalink')[0].attrs['data-conversation-id']
-                time = datetime.fromtimestamp(
+                timestamp = datetime.fromtimestamp(
                     int(tweet.find('._timestamp')[0].attrs['data-time-ms'])/1000.0)
                 interactions = [x.text for x in tweet.find(
                     '.ProfileTweet-actionCount')]
@@ -56,7 +60,7 @@ def get_tweets(user, pages=25):
                             tmp = style.split('/')[-1]
                             video_id = tmp[:tmp.index('.jpg')]
                             videos.append({'id': video_id})
-                tweets.append({'tweetId': tweetId, 'time': time, 'text': text,
+                tweets.append({'tweetId': tweetId, 'time': timestamp, 'text': text,
                                'replies': replies, 'retweets': retweets, 'likes': likes, 
                                'entries': {
                                     'hashtags': hashtags, 'urls': urls,
@@ -69,10 +73,11 @@ def get_tweets(user, pages=25):
             for tweet in tweets:
                 if tweet:
                     tweet['text'] = re.sub('http', ' http', tweet['text'], 1)
-                    yield tweet
+                    yield {'tweet': tweet, 'status': status }
 
             r = session.get(
                 url, params = {'max_position': last_tweet}, headers = headers)
             pages += -1
+            print('progress:', (amountPages-pages)/amountPages * 100, '%')
 
     yield from gen_tweets(pages)
