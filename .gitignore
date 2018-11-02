@@ -9,3 +9,4 @@ __pycache__/
 /t.py
 
 /twitter_scraper.egg-info/
+.ipynb_checkpoints
